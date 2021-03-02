@@ -1,4 +1,4 @@
-##The NextJS version of the Peonies at the Met Project
+#The NextJS version of the Peonies at the Met Project
 
 # The Peony Art Experience
 Using the [The Met API](https://metmuseum.github.io/) to display the artwork with images that contain the Peony Flower.
