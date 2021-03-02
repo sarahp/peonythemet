@@ -1,6 +1,6 @@
-/*body {*/
-/*  background: #888888;*/
-/*}*/
+body {
+  background: #888888;
+}
 
 .opening-title {
   display: flex;
@@ -8,18 +8,21 @@
   background: #000000;
   color: #ffffff;
 }
-.opening-title a {
+
+a {
   color: #ffffff;
   margin: 5px;
 }
 
-.opening-title h1 {
+h1 {
   display: flex;
   align-items: center;
   margin: 0 15px;
 }
 
-.opening-title p {
+
+
+p {
   display: flex;
   align-items: center;
   margin-bottom: 5px;
@@ -31,9 +34,9 @@
   justify-content: center;
   align-items: center;
   min-height: 85vh;
-}
 
 .work-title {
   color: #efefef;
   margin: 10px 0;
+}
 }

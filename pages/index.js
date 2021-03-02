@@ -1,65 +1,69 @@
-import Head from 'next/head'
+import React, {useState, useEffect, useCallback} from 'react';
 import styles from '../styles/Home.module.css'
 
-export default function Home() {
-  return (
-    <div className={styles.container}>
-      <Head>
-        <title>Create Next App</title>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
 
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
 
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
+const App = () => {
 
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
+    const [artworkIDs, setArtworkIDs] = useState([]);
+    const [totalPages, setTotalPages] = useState([]);
 
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
 
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
+    useCallback(useEffect(() => {
+        fetch('https://collectionapi.metmuseum.org/public/collection/v1/search?hasImage=true&q=peony')
+            .then(response => {
+                // console.log(response.json());
+                return response.json()
+            })
+            .then(Response => {
+                setArtworkIDs(Response.objectIDs);
+                setTotalPages(Response.total);
+            });
 
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
+    },[]), []);
 
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className={styles.logo} />
-        </a>
-      </footer>
-    </div>
-  )
-}
+    // Choose one piece to display.
+
+    const [artworkID, setArtworkID] = useState([]);
+
+    useEffect(() => {
+        setArtworkID(artworkIDs[Math.floor(Math.random() * artworkIDs.length)]);
+    }, [artworkIDs]);
+
+    console.log(artworkID);
+
+
+    const [images, setImages] = useState([]);
+    const [title, setTitle] = useState([]);
+
+    useEffect(() => {
+        fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${artworkID}`)
+            .then(response2 =>{
+                return response2.json()
+            })
+            .then(imageResponse => {
+                setImages(imageResponse.primaryImageSmall);
+                setTitle(imageResponse.title);
+            })
+
+    }, [artworkID]);
+
+
+    return (
+        <>
+            <div className="opening-title">
+                <h1>The Peony Art Experience</h1>
+                <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank"> theMetAPI's </a>collection.</p>
+            </div>
+            <div className="container">
+                <div className="art">
+                    <div className="work-title">This work is: {title}</div>
+                    <img src={images} alt={title} />
+                </div>
+            </div>
+        </>
+
+    );
+};
+
+export default App;
