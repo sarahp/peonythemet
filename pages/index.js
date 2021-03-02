@@ -1,6 +1,5 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import styles from '../styles/Home.module.css'
-
+import '../styles/Home.module.css'
 
 
 const App = () => {
