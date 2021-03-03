@@ -2,6 +2,20 @@ body {
   background: #888888;
 }
 
+/* Small screen media query */
+
+@media only screen and (max-width: 600px) {
+
+    .art {
+        max-width: 300px
+    }
+
+    img {
+        max-width: 300px;
+    }
+
+}
+
 .opening-title {
     display: flex;
     justify-content: center;
@@ -17,12 +31,6 @@ body {
     display: flex;
     align-items: center;
     margin: 0 15px;
-}
-
-.opening-title p {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px;
 }
 
 
