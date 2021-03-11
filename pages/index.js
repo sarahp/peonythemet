@@ -8,7 +8,7 @@ const App = () => {
     const [totalPages, setTotalPages] = useState([]);
 
 
-    useCallback(useEffect(() => {
+    useEffect(() => {
         fetch('https://collectionapi.metmuseum.org/public/collection/v1/search?hasImage=true&q=peony')
             .then(response => {
                 // console.log(response.json());
@@ -19,7 +19,7 @@ const App = () => {
                 setTotalPages(Response.total);
             });
 
-    },[]), []);
+    },[]);
 
     // Choose one piece to display.
 
@@ -52,7 +52,7 @@ const App = () => {
         <>
             <div className="opening-title">
                 <h1>The Peony Art Experience</h1>
-                <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank"> theMetAPI's </a>collection.</p>
+                <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer"> theMetAPI's </a>collection.</p>
             </div>
             <div className="container">
                 <div className="art">
