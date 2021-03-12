@@ -1,5 +1,4 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import '../styles/Home.module.css';
 import {Button} from "@material-ui/core";
 
 
@@ -51,7 +50,7 @@ const App = () => {
             <header>
             <div className="opening-title">
                 <h1>The Peony Art Experience</h1>
-                <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer"> theMetAPI's </a>collection.</p>
+                <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer" tabIndex="1"> theMetAPI's </a>collection.</p>
             </div>
             </header>
             <main>
@@ -63,7 +62,7 @@ const App = () => {
             </div>
             </main>
             <footer>
-                ©SarahP.Studio created by Sarah P. <Button><a href="https://sarahp.studio" target="_blank" rel="noopener noreferrer">Hire Me</a></Button>
+                ©SarahP.Studio created by Sarah P. <Button variant="outlined"><a href="https://sarahp.studio" target="_blank" rel="noopener noreferrer" tabIndex="2">Visit my Portfolio</a></Button>
             </footer>
         </>
 
