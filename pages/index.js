@@ -1,5 +1,6 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import '../styles/Home.module.css';
+import {Button} from "@material-ui/core";
 
 
 const App = () => {
@@ -11,7 +12,6 @@ const App = () => {
     useEffect(() => {
         fetch('https://collectionapi.metmuseum.org/public/collection/v1/search?hasImage=true&q=peony')
             .then(response => {
-                // console.log(response.json());
                 return response.json()
             })
             .then(Response => {
@@ -28,8 +28,6 @@ const App = () => {
     useEffect(() => {
         setArtworkID(artworkIDs[Math.floor(Math.random() * artworkIDs.length)]);
     }, [artworkIDs]);
-
-    console.log(artworkID);
 
 
     const [images, setImages] = useState([]);
@@ -50,16 +48,23 @@ const App = () => {
 
     return (
         <>
+            <header>
             <div className="opening-title">
                 <h1>The Peony Art Experience</h1>
                 <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer"> theMetAPI's </a>collection.</p>
             </div>
+            </header>
+            <main>
             <div className="container">
                 <div className="art">
                     <div className="work-title">This work is: {title}</div>
                     <img src={images} alt={title} />
                 </div>
             </div>
+            </main>
+            <footer>
+                ©SarahP.Studio created by Sarah P. <Button><a href="https://sarahp.studio" target="_blank" rel="noopener noreferrer">Hire Me</a></Button>
+            </footer>
         </>
 
     );
