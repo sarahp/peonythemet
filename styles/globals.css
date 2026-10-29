@@ -6,8 +6,13 @@ body {
 
 @media only screen and (max-width: 600px) {
 
-    .art {
-        max-width: 300px
+    .art,
+    .work-details {
+        max-width: 300px;
+    }
+
+    .work-details {
+        width: 300px;
     }
 
     img {
@@ -41,6 +46,12 @@ body {
     min-height: 85vh;
 }
 
+.art {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .work-title {
     color: #efefef;
     margin: 10px 0;
@@ -50,7 +61,26 @@ body {
     display: flex;
     justify-content: center;
     margin-top: 16px;
-    margin-bottom: 75px;
+}
+
+.work-details {
+    width: min(640px, 90vw);
+    margin: 20px auto 75px;
+    color: #efefef;
+    text-align: center;
+}
+
+.work-details p {
+    margin: 4px 0;
+}
+
+.credit-line {
+    margin-top: 12px;
+}
+
+.credit-line a {
+    color: #ffffff;
+    text-decoration: underline;
 }
 
 .refresh-button {

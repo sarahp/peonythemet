@@ -9,6 +9,12 @@ function pickArtwork(ids, currentId) {
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
+function metObjectUrl(value) {
+    const url = String(value || '').trim();
+    if (!url.startsWith('https://') && !url.startsWith('http://')) return '';
+    return url;
+}
+
 function imageLoads(url) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -73,6 +79,11 @@ const App = () => {
 
     const [images, setImages] = useState('');
     const [title, setTitle] = useState('');
+    const [period, setPeriod] = useState('');
+    const [objectDate, setObjectDate] = useState('');
+    const [culture, setCulture] = useState('');
+    const [creditLine, setCreditLine] = useState('');
+    const [objectUrl, setObjectUrl] = useState('');
 
     const showAnother = (currentId) => {
         const available = artworkIDs.filter((id) => !excludedIDs.current.has(id));
@@ -111,6 +122,11 @@ const App = () => {
 
                 setImages(imageUrl);
                 setTitle(imageResponse.title || '');
+                setPeriod(imageResponse.period || '');
+                setObjectDate(imageResponse.objectDate || '');
+                setCulture(imageResponse.culture || '');
+                setCreditLine(imageResponse.creditLine || '');
+                setObjectUrl(metObjectUrl(imageResponse.objectURL));
             } catch {
                 if (!cancelled) skipBroken(artworkID);
             }
@@ -142,11 +158,21 @@ const App = () => {
                     <div className="refresh-row">
                         <button type="button" className="refresh-button" onClick={() => showAnother(artworkID)} disabled={!artworkIDs.length} tabIndex={2}>New Peony piece?</button>
                     </div>
+                    <div className="work-details">
+                        {period ? <p>Period: {period}</p> : null}
+                        {objectDate ? <p>Date: {objectDate}</p> : null}
+                        {culture ? <p>Culture: {culture}</p> : null}
+                        {creditLine ? (
+                            <p className="credit-line">
+                                Credit: {objectUrl ? <a href={objectUrl} target="_blank" rel="noopener noreferrer" tabIndex={3}>{creditLine}</a> : creditLine}
+                            </p>
+                        ) : null}
+                    </div>
                 </div>
             </div>
             </main>
             <footer>
-                ©SarahP.Studio created by Sarah Peony <a className="portfolio-link" href="https://sarahp.studio" target="_blank" rel="noopener noreferrer" tabIndex={3}>Visit my Portfolio</a>
+                ©SarahP.Studio created by Sarah Peony <a className="portfolio-link" href="https://sarahp.studio" target="_blank" rel="noopener noreferrer" tabIndex={4}>Visit my Portfolio</a>
             </footer>
         </>
 
