@@ -53,3 +53,17 @@ footer {
 footer a {
     color: #ffffff;
 }
+
+.portfolio-link {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 5px 15px;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 0.875rem;
+    line-height: 1.75;
+    letter-spacing: 0.02857em;
+    text-transform: uppercase;
+}

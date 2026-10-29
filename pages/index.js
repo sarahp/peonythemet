@@ -1,5 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
-import {Button} from "@material-ui/core";
+import React, {useState, useEffect} from 'react';
 
 
 const App = () => {
@@ -9,15 +8,39 @@ const App = () => {
 
 
     useEffect(() => {
-        fetch('https://collectionapi.metmuseum.org/public/collection/v1/search?hasImage=true&q=peony')
-            .then(response => {
-                return response.json()
-            })
-            .then(Response => {
-                setArtworkIDs(Response.objectIDs);
-                setTotalPages(Response.total);
-            });
+        let cancelled = false;
+        const limit = 500;
 
+        async function loadArtwork() {
+            const ids = [];
+            let offset = 0;
+            let total = 0;
+
+            do {
+                const response = await fetch(
+                    `https://collectionapi.metmuseum.org/public/collection/v1.1/search?hasImage=true&q=peony&limit=${limit}&offset=${offset}`
+                );
+                const data = await response.json();
+                if (cancelled) return;
+
+                total = data.total || 0;
+                if (Array.isArray(data.objectIDs)) {
+                    ids.push(...data.objectIDs);
+                }
+                offset += limit;
+            } while (offset < total);
+
+            if (!cancelled) {
+                setArtworkIDs(ids);
+                setTotalPages(total);
+            }
+        }
+
+        loadArtwork();
+
+        return () => {
+            cancelled = true;
+        };
     },[]);
 
     // Choose one piece to display.
@@ -25,6 +48,7 @@ const App = () => {
     const [artworkID, setArtworkID] = useState([]);
 
     useEffect(() => {
+        if (!artworkIDs.length) return;
         setArtworkID(artworkIDs[Math.floor(Math.random() * artworkIDs.length)]);
     }, [artworkIDs]);
 
@@ -33,6 +57,8 @@ const App = () => {
     const [title, setTitle] = useState([]);
 
     useEffect(() => {
+        if (typeof artworkID !== 'number') return;
+
         fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${artworkID}`)
             .then(response2 =>{
                 return response2.json()
@@ -50,7 +76,7 @@ const App = () => {
             <header>
             <div className="opening-title">
                 <h1>The Peony Art Experience</h1>
-                <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer" tabIndex="1"> theMetAPI's </a>collection.</p>
+                <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer" tabIndex={1}> theMetAPI's </a>collection.</p>
             </div>
             </header>
             <main>
@@ -62,7 +88,7 @@ const App = () => {
             </div>
             </main>
             <footer>
-                ©SarahP.Studio created by Sarah P. <Button variant="outlined"><a href="https://sarahp.studio" target="_blank" rel="noopener noreferrer" tabIndex="2">Visit my Portfolio</a></Button>
+                ©SarahP.Studio created by Sarah Peony <a className="portfolio-link" href="https://sarahp.studio" target="_blank" rel="noopener noreferrer" tabIndex={2}>Visit my Portfolio</a>
             </footer>
         </>
 
