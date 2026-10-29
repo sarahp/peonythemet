@@ -1,4 +1,5 @@
 import React, {useState, useEffect, useRef} from 'react';
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 function pickArtwork(ids, currentId) {
     if (!ids.length) return null;
@@ -127,6 +128,7 @@ const App = () => {
     return (
         <>
             <header>
+            <SpeedInsights />
             <div className="opening-title">
                 <h1>The Peony Art Experience</h1>
                 <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer" tabIndex={1}> theMetAPI's </a>collection.</p>
