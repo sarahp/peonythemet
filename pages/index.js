@@ -1,18 +1,34 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect} from 'react';
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import {
+    pickArtwork,
+    metObjectUrl,
+    imageUrlFromRecord,
+    toArtworkSummary,
+    readFreshArtworkCache,
+    collectShowableArtworks,
+    fetchWithRetry,
+} from '../lib/artwork.mjs';
 
-function pickArtwork(ids, currentId) {
-    if (!ids.length) return null;
+const CACHE_KEY = 'peony-showable-artworks-v2';
+const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const OBJECT_CHECK_CONCURRENCY = 4;
 
-    const choices = ids.filter((id) => id !== currentId);
-    const pool = choices.length ? choices : ids;
-    return pool[Math.floor(Math.random() * pool.length)];
+function readStoredArtworks() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+        return readFreshArtworkCache(stored, Date.now(), CACHE_MAX_AGE_MS);
+    } catch {
+        return null;
+    }
 }
 
-function metObjectUrl(value) {
-    const url = String(value || '').trim();
-    if (!url.startsWith('https://') && !url.startsWith('http://')) return '';
-    return url;
+function storeArtworks(artworks) {
+    try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), artworks }));
+    } catch {
+        // The count stays in memory if the browser cannot store it.
+    }
 }
 
 function imageLoads(url) {
@@ -26,37 +42,74 @@ function imageLoads(url) {
 
 const App = () => {
 
-    const [artworkIDs, setArtworkIDs] = useState([]);
-    const [totalPages, setTotalPages] = useState([]);
-    const excludedIDs = useRef(new Set());
+    const [artworks, setArtworks] = useState(null);
+    const [loadFailed, setLoadFailed] = useState(false);
+    const [artworkID, setArtworkID] = useState(null);
 
 
     useEffect(() => {
         let cancelled = false;
-        const limit = 500;
 
         async function loadArtwork() {
+            const cached = readStoredArtworks();
+            if (cached) {
+                setArtworks(cached);
+                return;
+            }
+
             const ids = [];
             let offset = 0;
             let total = 0;
 
-            do {
-                const response = await fetch(
-                    `https://collectionapi.metmuseum.org/public/collection/v1.1/search?hasImage=true&q=peony&limit=${limit}&offset=${offset}`
-                );
-                const data = await response.json();
+            try {
+                do {
+                    const response = await fetchWithRetry(
+                        `https://collectionapi.metmuseum.org/public/collection/v1.1/search?hasImage=true&q=peony&limit=500&offset=${offset}`
+                    );
+                    if (!response.ok) throw new Error('The Met search could not be loaded.');
+                    const data = await response.json();
+                    if (cancelled) return;
+
+                    total = data.total || 0;
+                    const pageIds = Array.isArray(data.objectIDs) ? data.objectIDs : [];
+                    if (!pageIds.length) throw new Error('The Met search ended before all records were listed.');
+                    ids.push(...pageIds);
+                    offset += pageIds.length;
+                } while (offset < total);
+
                 if (cancelled) return;
 
-                total = data.total || 0;
-                if (Array.isArray(data.objectIDs)) {
-                    ids.push(...data.objectIDs);
-                }
-                offset += limit;
-            } while (offset < total);
+                let pending = [...new Set(ids)];
+                let records = [];
 
-            if (!cancelled) {
-                setArtworkIDs(ids);
-                setTotalPages(total);
+                for (let round = 0; round < 4 && pending.length && !cancelled; round += 1) {
+                    const result = await collectShowableArtworks(pending, async (id) => {
+                        const response = await fetchWithRetry(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`);
+                        if (response.status === 404) return null;
+                        if (!response.ok) throw new Error(`Object ${id} could not be loaded.`);
+                        return response.json();
+                    }, {
+                        concurrency: OBJECT_CHECK_CONCURRENCY,
+                        isCancelled: () => cancelled,
+                    });
+
+                    records = records.concat(result.showable);
+                    pending = result.unchecked;
+
+                    if (pending.length && !cancelled) {
+                        await new Promise((resolve) => setTimeout(resolve, 1000 * (round + 1)));
+                    }
+                }
+
+                if (cancelled) return;
+                if (pending.length) throw new Error('Some Met records could not be checked.');
+
+                const showable = records.map(toArtworkSummary);
+                storeArtworks(showable);
+                setArtworks(showable);
+            } catch (error) {
+                console.error(error);
+                if (!cancelled) setLoadFailed(true);
             }
         }
 
@@ -67,14 +120,15 @@ const App = () => {
         };
     },[]);
 
-    // Choose one piece to display.
-
-    const [artworkID, setArtworkID] = useState([]);
-
     useEffect(() => {
-        if (!artworkIDs.length) return;
-        setArtworkID(pickArtwork(artworkIDs));
-    }, [artworkIDs]);
+        if (!artworks) return;
+
+        setArtworkID((current) => {
+            const ids = artworks.map((artwork) => artwork.objectID);
+            if (typeof current === 'number' && ids.includes(current)) return current;
+            return pickArtwork(ids, current);
+        });
+    }, [artworks]);
 
 
     const [images, setImages] = useState('');
@@ -85,51 +139,49 @@ const App = () => {
     const [creditLine, setCreditLine] = useState('');
     const [objectUrl, setObjectUrl] = useState('');
 
-    const showAnother = (currentId) => {
-        const available = artworkIDs.filter((id) => !excludedIDs.current.has(id));
-        const nextId = pickArtwork(available, currentId);
-        if (nextId != null && nextId !== currentId) {
+    const showAnother = () => {
+        if (!artworks?.length) return;
+
+        const nextId = pickArtwork(artworks.map((artwork) => artwork.objectID), artworkID);
+        if (nextId != null && nextId !== artworkID) {
             setArtworkID(nextId);
         }
     };
 
     const skipBroken = (rejectedId) => {
-        if (typeof rejectedId === 'number') {
-            excludedIDs.current.add(rejectedId);
-        }
-        showAnother(rejectedId);
+        setArtworks((current) => {
+            if (!current) return current;
+            const next = current.filter((artwork) => artwork.objectID !== rejectedId);
+            storeArtworks(next);
+            return next;
+        });
     };
 
     useEffect(() => {
         if (typeof artworkID !== 'number') return;
 
+        const summary = artworks?.find((artwork) => artwork.objectID === artworkID);
+        if (!summary) return;
+
         let cancelled = false;
 
         async function loadObject() {
-            try {
-                const response = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${artworkID}`);
-                const imageResponse = await response.json();
-                if (cancelled) return;
+            const imageUrl = imageUrlFromRecord(summary);
+            const canShow = Boolean(imageUrl) && await imageLoads(imageUrl);
+            if (cancelled) return;
 
-                const imageUrl = imageResponse.primaryImageSmall || imageResponse.primaryImage || '';
-                const canShow = Boolean(imageUrl) && await imageLoads(imageUrl);
-                if (!canShow) {
-                    if (!cancelled) skipBroken(artworkID);
-                    else if (typeof artworkID === 'number') excludedIDs.current.add(artworkID);
-                    return;
-                }
-                if (cancelled) return;
-
-                setImages(imageUrl);
-                setTitle(imageResponse.title || '');
-                setPeriod(imageResponse.period || '');
-                setObjectDate(imageResponse.objectDate || '');
-                setCulture(imageResponse.culture || '');
-                setCreditLine(imageResponse.creditLine || '');
-                setObjectUrl(metObjectUrl(imageResponse.objectURL));
-            } catch {
-                if (!cancelled) skipBroken(artworkID);
+            if (!canShow) {
+                skipBroken(artworkID);
+                return;
             }
+
+            setImages(imageUrl);
+            setTitle(summary.title || '');
+            setPeriod(summary.period || '');
+            setObjectDate(summary.objectDate || '');
+            setCulture(summary.culture || '');
+            setCreditLine(summary.creditLine || '');
+            setObjectUrl(metObjectUrl(summary.objectURL));
         }
 
         loadObject();
@@ -138,8 +190,10 @@ const App = () => {
             cancelled = true;
         };
 
-    }, [artworkID]);
+    }, [artworkID, artworks]);
 
+
+    const shownCount = artworks == null ? null : artworks.length;
 
     return (
         <>
@@ -147,7 +201,14 @@ const App = () => {
             <SpeedInsights />
             <div className="opening-title">
                 <h1>The Peony Art Experience</h1>
-                <p>Refresh to explore each of the {totalPages} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer" tabIndex={1}> theMetAPI's </a>collection.</p>
+                <p>
+                    {loadFailed
+                        ? <>The Met collection could not be reached. Refresh the page to try again.</>
+                        : shownCount == null
+                        ? <>Checking Met records for a working image from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer" tabIndex={1}> theMetAPI's </a>collection.</>
+                        : <>Refresh to explore each of the {shownCount} images that include the Peony flower from <a href="https://metmuseum.github.io/" target="_blank" rel="noopener noreferrer" tabIndex={1}> theMetAPI's </a>collection.</>
+                    }
+                </p>
             </div>
             </header>
             <main>
@@ -156,7 +217,7 @@ const App = () => {
                     <div className="work-title">This work is: {title}</div>
                     {images ? <img src={images} alt={title} onError={() => skipBroken(artworkID)} /> : null}
                     <div className="refresh-row">
-                        <button type="button" className="refresh-button" onClick={() => showAnother(artworkID)} disabled={!artworkIDs.length} tabIndex={2}>New Peony piece?</button>
+                        <button type="button" className="refresh-button" onClick={showAnother} disabled={!artworks?.length} tabIndex={2}>New Peony piece?</button>
                     </div>
                     <div className="work-details">
                         {period ? <p>Period: {period}</p> : null}
