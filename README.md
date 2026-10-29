@@ -5,3 +5,7 @@ Using the [The Met API](https://metmuseum.github.io/) to display the artwork wit
 Built on [React](https://reactjs.org/), using hooks for the API calls.
 
 Created by [Sarah Peony](https://github.com/sarahp) aka [SarahP.Studio](http://sarahp.studio/).
+
+## License
+
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). Noncommercial use is allowed. Commercial use requires prior written permission from the copyright holder.
