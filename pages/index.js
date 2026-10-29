@@ -4,30 +4,29 @@ import {
     pickArtwork,
     metObjectUrl,
     imageUrlFromRecord,
-    toArtworkSummary,
-    readFreshArtworkCache,
-    collectShowableArtworks,
     fetchWithRetry,
 } from '../lib/artwork.mjs';
 
-const CACHE_KEY = 'peony-showable-artworks-v2';
+const CACHE_KEY = 'peony-search-ids-v3';
 const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
-const OBJECT_CHECK_CONCURRENCY = 4;
 
-function readStoredArtworks() {
+function readStoredIds() {
     try {
         const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-        return readFreshArtworkCache(stored, Date.now(), CACHE_MAX_AGE_MS);
+        if (!stored || typeof stored.savedAt !== 'number' || !Array.isArray(stored.ids)) return null;
+        if (Date.now() - stored.savedAt > CACHE_MAX_AGE_MS) return null;
+        const ids = stored.ids.filter((id) => typeof id === 'number');
+        return ids.length ? ids : null;
     } catch {
         return null;
     }
 }
 
-function storeArtworks(artworks) {
+function storeIds(ids) {
     try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), artworks }));
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), ids }));
     } catch {
-        // The count stays in memory if the browser cannot store it.
+        // The list stays in memory if the browser cannot store it.
     }
 }
 
@@ -42,7 +41,7 @@ function imageLoads(url) {
 
 const App = () => {
 
-    const [artworks, setArtworks] = useState(null);
+    const [artworkIDs, setArtworkIDs] = useState(null);
     const [loadFailed, setLoadFailed] = useState(false);
     const [artworkID, setArtworkID] = useState(null);
 
@@ -51,9 +50,9 @@ const App = () => {
         let cancelled = false;
 
         async function loadArtwork() {
-            const cached = readStoredArtworks();
+            const cached = readStoredIds();
             if (cached) {
-                setArtworks(cached);
+                setArtworkIDs(cached);
                 return;
             }
 
@@ -72,41 +71,17 @@ const App = () => {
 
                     total = data.total || 0;
                     const pageIds = Array.isArray(data.objectIDs) ? data.objectIDs : [];
-                    if (!pageIds.length) throw new Error('The Met search ended before all records were listed.');
+                    if (!pageIds.length) break;
                     ids.push(...pageIds);
                     offset += pageIds.length;
                 } while (offset < total);
 
                 if (cancelled) return;
+                if (!ids.length) throw new Error('The Met search returned no records.');
 
-                let pending = [...new Set(ids)];
-                let records = [];
-
-                for (let round = 0; round < 4 && pending.length && !cancelled; round += 1) {
-                    const result = await collectShowableArtworks(pending, async (id) => {
-                        const response = await fetchWithRetry(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`);
-                        if (response.status === 404) return null;
-                        if (!response.ok) throw new Error(`Object ${id} could not be loaded.`);
-                        return response.json();
-                    }, {
-                        concurrency: OBJECT_CHECK_CONCURRENCY,
-                        isCancelled: () => cancelled,
-                    });
-
-                    records = records.concat(result.showable);
-                    pending = result.unchecked;
-
-                    if (pending.length && !cancelled) {
-                        await new Promise((resolve) => setTimeout(resolve, 1000 * (round + 1)));
-                    }
-                }
-
-                if (cancelled) return;
-                if (pending.length) throw new Error('Some Met records could not be checked.');
-
-                const showable = records.map(toArtworkSummary);
-                storeArtworks(showable);
-                setArtworks(showable);
+                const uniqueIds = [...new Set(ids)];
+                storeIds(uniqueIds);
+                setArtworkIDs(uniqueIds);
             } catch (error) {
                 console.error(error);
                 if (!cancelled) setLoadFailed(true);
@@ -121,14 +96,13 @@ const App = () => {
     },[]);
 
     useEffect(() => {
-        if (!artworks) return;
+        if (!artworkIDs) return;
 
         setArtworkID((current) => {
-            const ids = artworks.map((artwork) => artwork.objectID);
-            if (typeof current === 'number' && ids.includes(current)) return current;
-            return pickArtwork(ids, current);
+            if (typeof current === 'number' && artworkIDs.includes(current)) return current;
+            return pickArtwork(artworkIDs, current);
         });
-    }, [artworks]);
+    }, [artworkIDs]);
 
 
     const [images, setImages] = useState('');
@@ -140,19 +114,19 @@ const App = () => {
     const [objectUrl, setObjectUrl] = useState('');
 
     const showAnother = () => {
-        if (!artworks?.length) return;
+        if (!artworkIDs?.length) return;
 
-        const nextId = pickArtwork(artworks.map((artwork) => artwork.objectID), artworkID);
+        const nextId = pickArtwork(artworkIDs, artworkID);
         if (nextId != null && nextId !== artworkID) {
             setArtworkID(nextId);
         }
     };
 
     const skipBroken = (rejectedId) => {
-        setArtworks((current) => {
+        setArtworkIDs((current) => {
             if (!current) return current;
-            const next = current.filter((artwork) => artwork.objectID !== rejectedId);
-            storeArtworks(next);
+            const next = current.filter((id) => id !== rejectedId);
+            storeIds(next);
             return next;
         });
     };
@@ -160,28 +134,39 @@ const App = () => {
     useEffect(() => {
         if (typeof artworkID !== 'number') return;
 
-        const summary = artworks?.find((artwork) => artwork.objectID === artworkID);
-        if (!summary) return;
-
         let cancelled = false;
 
         async function loadObject() {
-            const imageUrl = imageUrlFromRecord(summary);
-            const canShow = Boolean(imageUrl) && await imageLoads(imageUrl);
-            if (cancelled) return;
+            try {
+                const response = await fetchWithRetry(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${artworkID}`);
+                if (cancelled) return;
+                if (response.status === 404) {
+                    skipBroken(artworkID);
+                    return;
+                }
+                if (!response.ok) throw new Error(`Object ${artworkID} could not be loaded.`);
 
-            if (!canShow) {
-                skipBroken(artworkID);
-                return;
+                const record = await response.json();
+                const imageUrl = imageUrlFromRecord(record);
+                const canShow = Boolean(imageUrl) && await imageLoads(imageUrl);
+                if (cancelled) return;
+
+                if (!canShow) {
+                    skipBroken(artworkID);
+                    return;
+                }
+
+                setImages(imageUrl);
+                setTitle(record.title || '');
+                setPeriod(record.period || '');
+                setObjectDate(record.objectDate || '');
+                setCulture(record.culture || '');
+                setCreditLine(record.creditLine || '');
+                setObjectUrl(metObjectUrl(record.objectURL));
+            } catch (error) {
+                console.error(error);
+                if (!cancelled) skipBroken(artworkID);
             }
-
-            setImages(imageUrl);
-            setTitle(summary.title || '');
-            setPeriod(summary.period || '');
-            setObjectDate(summary.objectDate || '');
-            setCulture(summary.culture || '');
-            setCreditLine(summary.creditLine || '');
-            setObjectUrl(metObjectUrl(summary.objectURL));
         }
 
         loadObject();
@@ -190,10 +175,10 @@ const App = () => {
             cancelled = true;
         };
 
-    }, [artworkID, artworks]);
+    }, [artworkID]);
 
 
-    const shownCount = artworks == null ? null : artworks.length;
+    const shownCount = artworkIDs == null ? null : artworkIDs.length;
 
     return (
         <>
@@ -217,7 +202,7 @@ const App = () => {
                     <div className="work-title">This work is: {title}</div>
                     {images ? <img src={images} alt={title} onError={() => skipBroken(artworkID)} /> : null}
                     <div className="refresh-row">
-                        <button type="button" className="refresh-button" onClick={showAnother} disabled={!artworks?.length} tabIndex={2}>New Peony piece?</button>
+                        <button type="button" className="refresh-button" onClick={showAnother} disabled={!artworkIDs?.length} tabIndex={2}>New Peony piece?</button>
                     </div>
                     <div className="work-details">
                         {period ? <p>Period: {period}</p> : null}
